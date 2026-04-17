@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Search Flights</h2>
+
+<form method="POST" action="/search">
+    <label>From (IATA code):</label><br>
+    <input type="text" name="departure" maxlength="3" required><br><br>
+
+    <label>To (IATA code):</label><br>
+    <input type="text" name="arrival" maxlength="3" required><br><br>
+
+    <label>Date:</label><br>
+    <input type="date" name="date" required><br><br>
+
+    <label>Class:</label><br>
+    <select name="class_type">
+        <option value="ECONOMY">Economy</option>
+        <option value="FIRST">First Class</option>
+    </select><br><br>
+
+    <button type="submit">Search</button>
+</form>
+
+{% if flights %}
+<h3>Results:</h3>
+<table border="1">
+    <tr>
+        <th>Flight</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Departure</th>
+        <th>Arrival</th>
+        <th>Price</th>
+        <th></th>
+    </tr>
+    {% for f in flights %}
+    <tr>
+        <td>{{ f[0] }}</td>
+        <td>{{ f[1] }}</td>
+        <td>{{ f[2] }}</td>
+        <td>{{ f[3] }}</td>
+        <td>{{ f[4] }}</td>
+        <td>${{ f[5] }}</td>
+        <td><a href="/book/{{ f[6] }}/{{ class_type }}">Book</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% elif searched %}
+<p>No flights found.</p>
+{% endif %}
+
+{% endblock %}

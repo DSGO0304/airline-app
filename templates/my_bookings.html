@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>My Bookings</h2>
+
+{% if bookings %}
+<table border="1">
+    <tr>
+        <th>Booking ID</th>
+        <th>Flight</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Date</th>
+        <th>Class</th>
+        <th>Status</th>
+        <th></th>
+    </tr>
+    {% for b in bookings %}
+    <tr>
+        <td>{{ b[0] }}</td>
+        <td>{{ b[1] }}</td>
+        <td>{{ b[2] }}</td>
+        <td>{{ b[3] }}</td>
+        <td>{{ b[4] }}</td>
+        <td>{{ b[5] }}</td>
+        <td>{{ b[6] }}</td>
+        <td>
+            {% if b[6] == 'CONFIRMED' %}
+            <a href="/cancel/{{ b[0] }}">Cancel</a>
+            {% endif %}
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<p>No bookings found.</p>
+{% endif %}
+
+<br>
+<a href="/search">Search for flights</a>
+{% endblock %}

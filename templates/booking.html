@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Book Flight</h2>
+
+{% if error %}
+    <p style="color:red;">{{ error }}</p>
+{% endif %}
+
+<h3>Flight Details</h3>
+<table border="1">
+    <tr><th>Flight</th><td>{{ flight[1] }}</td></tr>
+    <tr><th>From</th><td>{{ flight[3] }}</td></tr>
+    <tr><th>To</th><td>{{ flight[4] }}</td></tr>
+    <tr><th>Date</th><td>{{ flight[2] }}</td></tr>
+    <tr><th>Departure</th><td>{{ flight[5] }}</td></tr>
+    <tr><th>Arrival</th><td>{{ flight[6] }}</td></tr>
+    <tr><th>Class</th><td>{{ class_type }}</td></tr>
+    <tr><th>Price</th><td>${{ price }}</td></tr>
+</table>
+
+<br>
+<h3>Select Payment Method</h3>
+<form method="POST" action="/book/{{ flight[0] }}/{{ class_type }}">
+    <select name="card_id" required>
+        {% for card in cards %}
+        <option value="{{ card[0] }}">{{ card[1] }} - **** {{ card[2][-4:] }}</option>
+        {% endfor %}
+    </select><br><br>
+    <button type="submit">Confirm Booking</button>
+</form>
+{% endblock %}

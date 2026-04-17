@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Welcome, {{ email }}!</h2>
+
+<div class="menu">
+    <a href="/search">🔍 Search Flights</a>
+    <a href="/my-bookings">📋 My Bookings</a>
+    <a href="/account">👤 My Account</a>
+    <a href="/logout">🚪 Logout</a>
+</div>
+{% endblock %}
