@@ -6,6 +6,11 @@
 {% if error %}
     <p style="color:red;">{{ error }}</p>
 {% endif %}
+{% set url_error = request.args.get('error') %}
+{% if url_error %}
+    <div class="error">{{ url_error }}</div>
+{% endif %}
+
 {% if success %}
     <p style="color:green;">{{ success }}</p>
 {% endif %}
@@ -77,6 +82,13 @@
     <input type="text" name="card_number" placeholder="Card Number" maxlength="16" required><br><br>
     <input type="text" name="card_type" placeholder="VISA / MASTERCARD / AMEX" required><br><br>
     <input type="date" name="expiration_date" required><br><br>
+    <label>Billing Address:</label>
+    <select name="billing_address_id" required>
+        <option value="">-- Select a billing address --</option>
+        {% for a in addresses %}
+        <option value="{{ a[0] }}">{{ a[1] }}, {{ a[2] }}, {{ a[4] }}</option>
+        {% endfor %}
+    </select><br><br>
     <button type="submit">Add Card</button>
 </form>
 

@@ -76,36 +76,100 @@ def search():
     flights = []
     searched = False
     class_type = 'ECONOMY'
+    error = None
 
     if request.method == 'POST':
-        departure = request.form['departure'].upper()
-        arrival = request.form['arrival'].upper()
-        date = request.form['date']
-        class_type = request.form['class_type']
+        departure = request.form.get('departure', '').upper().strip()
+        arrival = request.form.get('arrival', '').upper().strip()
+        date = request.form.get('date', '')
+        class_type = request.form.get('class_type', 'ECONOMY')
+        max_price = request.form.get('max_price', '') or None
+        sort_by = request.form.get('sort_by', 'price')
+        return_flight = request.form.get('return_flight')
+        return_date = request.form.get('return_date', '')
         searched = True
 
-        try:
-            conn = get_connection()
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT f.flight_number, f.departure_airport, f.arrival_airport,
-                       f.departure_time, f.arrival_time, p.amount, f.flight_id
-                FROM Flight f
-                JOIN Price p ON f.flight_id = p.flight_id
-                WHERE f.departure_airport = %s
-                  AND f.arrival_airport = %s
-                  AND f.flight_date = %s
-                  AND p.class_type = %s
-                """,
-                (departure, arrival, date, class_type)
-            )
-            flights = cur.fetchall()
-            cur.close()
-            conn.close()
-        except Exception as e:
-            return render_template('search.html', error=str(e))
-    return render_template('search.html', flights=flights, searched=searched, class_type=class_type)
+        # Validate input
+        if not departure or not arrival or not date:
+            error = "Please fill in all fields."
+        elif len(departure) != 3 or len(arrival) != 3:
+            error = "Airport codes must be 3 characters."
+        elif departure == arrival:
+            error = "Departure and arrival airports cannot be the same."
+        else:
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT f.flight_number, f.departure_airport, f.arrival_airport,
+                           f.departure_time, f.arrival_time, p.amount, f.flight_id
+                    FROM Flight f
+                    JOIN Price p ON f.flight_id = p.flight_id
+                    WHERE f.departure_airport = %s
+                      AND f.arrival_airport = %s
+                      AND DATE(f.flight_date) = %s
+                      AND p.class_type = %s
+                                              AND (%s IS NULL OR p.amount <= %s)
+                      AND (SELECT COUNT(*) FROM Booking_Flight bf
+                           JOIN Booking b ON bf.booking_id = b.booking_id
+                           WHERE bf.flight_id = f.flight_id
+                             AND bf.class_type = %s
+                             AND b.booking_status = 'CONFIRMED')
+                          < (CASE WHEN %s = 'ECONOMY' 
+                                  THEN f.economy_class_capacity 
+                                  ELSE f.first_class_capacity END)
+                                        ORDER BY 
+                                                CASE WHEN %s = 'price' THEN p.amount END ASC,
+                                                CASE WHEN %s = 'duration' THEN 
+                                                        EXTRACT(EPOCH FROM (f.arrival_time - f.departure_time)) 
+                                                END ASC
+                                """, (departure, arrival, date, class_type, max_price, max_price, class_type, class_type, sort_by, sort_by))
+                flights = cur.fetchall()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                error = f"Search error: {str(e)}"
+
+        # Return flight search
+        return_flights = []
+        if return_flight and return_date:
+            try:
+                conn2 = get_connection()
+                cur2 = conn2.cursor()
+                cur2.execute("""
+                    SELECT f.flight_number, f.departure_airport, f.arrival_airport,
+                           f.departure_time, f.arrival_time, p.amount, f.flight_id
+                    FROM Flight f
+                    JOIN Price p ON f.flight_id = p.flight_id
+                    WHERE f.departure_airport = %s
+                      AND f.arrival_airport = %s
+                      AND DATE(f.flight_date) = %s
+                      AND p.class_type = %s
+                      AND (%s IS NULL OR p.amount <= %s)
+                      AND (SELECT COUNT(*) FROM Booking_Flight bf
+                           JOIN Booking b ON bf.booking_id = b.booking_id
+                           WHERE bf.flight_id = f.flight_id
+                             AND bf.class_type = %s
+                             AND b.booking_status = 'CONFIRMED')
+                          < (CASE WHEN %s = 'ECONOMY' 
+                                  THEN f.economy_class_capacity 
+                                  ELSE f.first_class_capacity END)
+                    ORDER BY 
+                        CASE WHEN %s = 'price' THEN p.amount END ASC,
+                        CASE WHEN %s = 'duration' THEN 
+                            EXTRACT(EPOCH FROM (f.arrival_time - f.departure_time)) 
+                        END ASC
+                """, (arrival, departure, return_date, class_type, max_price, max_price, class_type, class_type, sort_by, sort_by))
+                return_flights = cur2.fetchall()
+                cur2.close()
+                conn2.close()
+            except Exception as e:
+                error = f"Return flight search error: {str(e)}"
+
+    return render_template('search.html', flights=flights, searched=searched,
+                         class_type=class_type, error=error,
+                         return_flights=return_flights if 'return_flights' in dir() else [],
+                         return_date=return_date if 'return_date' in dir() else '')
 
 @app.route('/book/<int:flight_id>/<class_type>', methods=['GET', 'POST'])
 def book(flight_id, class_type):
@@ -122,6 +186,25 @@ def book(flight_id, class_type):
             FROM Flight f WHERE f.flight_id = %s
         """, (flight_id,))
         flight = cur.fetchone()
+
+        # Check seat availability before loading price data
+        cur.execute("""
+            SELECT (CASE WHEN %s = 'ECONOMY' 
+                         THEN f.economy_class_capacity 
+                         ELSE f.first_class_capacity END)
+                   - (SELECT COUNT(*) FROM Booking_Flight bf
+                      JOIN Booking b ON bf.booking_id = b.booking_id
+                      WHERE bf.flight_id = f.flight_id
+                        AND bf.class_type = %s
+                        AND b.booking_status = 'CONFIRMED')
+            FROM Flight f WHERE f.flight_id = %s
+        """, (class_type, class_type, flight_id))
+        seats_left = cur.fetchone()[0]
+        if seats_left <= 0:
+            cur.close()
+            conn.close()
+            return render_template('booking.html', error='Sorry, this flight is fully booked.')
+
         cur.execute("SELECT amount FROM Price WHERE flight_id = %s AND class_type = %s",
                     (flight_id, class_type))
         price = cur.fetchone()[0]
@@ -241,6 +324,13 @@ def delete_address(address_id):
     try:
         conn = get_connection()
         cur  = conn.cursor()
+        # Check if address is used as billing address for any card
+        cur.execute("SELECT COUNT(*) FROM Credit_Card WHERE billing_address_id = %s", (address_id,))
+        count = cur.fetchone()[0]
+        if count > 0:
+            cur.close()
+            conn.close()
+            return redirect('/account?error=Cannot delete address: it is used as a billing address for a credit card. Please delete the card first.')
         cur.execute("DELETE FROM Address WHERE address_id = %s", (address_id,))
         conn.commit()
         cur.close()
@@ -258,11 +348,12 @@ def add_card():
     card_number     = request.form['card_number']
     card_type       = request.form['card_type'].upper()
     expiration_date = request.form['expiration_date']
+    billing_address_id = request.form.get('billing_address_id') or None
     try:
         conn = get_connection()
         cur  = conn.cursor()
-        cur.execute("INSERT INTO Credit_Card (card_number, expiration_date, card_type, customer_email) VALUES (%s, %s, %s, %s)",
-                    (card_number, expiration_date, card_type, email))
+        cur.execute("INSERT INTO Credit_Card (card_number, expiration_date, card_type, customer_email, billing_address_id) VALUES (%s, %s, %s, %s, %s)",
+                    (card_number, expiration_date, card_type, email, billing_address_id))
         conn.commit()
         cur.close()
         conn.close()

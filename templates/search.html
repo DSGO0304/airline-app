@@ -3,21 +3,58 @@
 {% block content %}
 <h2>Search Flights</h2>
 
+{% if error %}
+<p style="color: red;"><strong>Error:</strong> {{ error }}</p>
+{% endif %}
+
 <form method="POST" action="/search">
     <label>From (IATA code):</label><br>
-    <input type="text" name="departure" maxlength="3" required><br><br>
+    <input type="text" name="departure" maxlength="3" required value="{{ request.form.get('departure', '') }}"><br><br>
 
     <label>To (IATA code):</label><br>
-    <input type="text" name="arrival" maxlength="3" required><br><br>
+    <input type="text" name="arrival" maxlength="3" required value="{{ request.form.get('arrival', '') }}"><br><br>
 
     <label>Date:</label><br>
-    <input type="date" name="date" required><br><br>
+    <input type="date" name="date" required value="{{ request.form.get('date', '') }}"><br><br>
 
     <label>Class:</label><br>
     <select name="class_type">
-        <option value="ECONOMY">Economy</option>
-        <option value="FIRST">First Class</option>
+        <option value="ECONOMY" {% if class_type == 'ECONOMY' %}selected{% endif %}>Economy</option>
+        <option value="FIRST" {% if class_type == 'FIRST' %}selected{% endif %}>First Class</option>
     </select><br><br>
+
+    <label>Max Price (optional):</label><br>
+    <input type="number" name="max_price" placeholder="e.g. 500" min="0" step="0.01" value="{{ request.form.get('max_price', '') }}"><br><br>
+
+    <label>Sort by:</label><br>
+    <select name="sort_by">
+        <option value="price" {% if request.form.get('sort_by', 'price') == 'price' %}selected{% endif %}>Price</option>
+        <option value="duration" {% if request.form.get('sort_by') == 'duration' %}selected{% endif %}>Duration</option>
+    </select><br><br>
+
+    <label>
+        <input type="checkbox" name="return_flight" id="return_flight">
+        Return Flight?
+    </label><br><br>
+
+    <div id="return_date_div" style="display:none;">
+        <label>Return Date:</label><br>
+        <input type="date" name="return_date" id="return_date"><br><br>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var cb = document.getElementById('return_flight');
+        var div = document.getElementById('return_date_div');
+
+        function toggleReturn() {
+            div.style.display = cb.checked ? 'block' : 'none';
+        }
+
+        cb.addEventListener('change', toggleReturn);
+        toggleReturn();
+    });
+    </script>
 
     <button type="submit">Search</button>
 </form>
@@ -48,6 +85,34 @@
 </table>
 {% elif searched %}
 <p>No flights found.</p>
+{% endif %}
+
+{% if return_flights %}
+<h3>Return Flights:</h3>
+<table border="1">
+    <tr>
+        <th>Flight</th>
+        <th>From</th>
+        <th>To</th>
+        <th>Departure</th>
+        <th>Arrival</th>
+        <th>Price</th>
+        <th></th>
+    </tr>
+    {% for f in return_flights %}
+    <tr>
+        <td>{{ f[0] }}</td>
+        <td>{{ f[1] }}</td>
+        <td>{{ f[2] }}</td>
+        <td>{{ f[3] }}</td>
+        <td>{{ f[4] }}</td>
+        <td>${{ f[5] }}</td>
+        <td><a href="/book/{{ f[6] }}/{{ class_type }}">Book</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% elif searched and return_date %}
+<p>No return flights found.</p>
 {% endif %}
 
 {% endblock %}
